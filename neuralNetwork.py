@@ -7,7 +7,7 @@ import torch.optim as optim
 class NN_Model(nn.Module):
 
     def __init__(self):
-        super(NN, self).__init__()
+        super(NN_Model, self).__init__()
         #LAYERS
 
     def forward(self, input):

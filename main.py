@@ -6,6 +6,10 @@ import GameGUI as gGUI
 import sys
 import argparse
 import rAgent
+import TDLambdaAgent as TDLA
+import random
+
+import torch
 
 def main(args):
     #gui = gGUI.GameGUI()
@@ -21,19 +25,70 @@ def main(args):
         players = ('human', 'human')
     if args.c:
         if int(args.c[0]) == 0:
-            players = ('human', rAgent.rAgent(qG, seed))
+            players = ('human', rAgent.rAgent())
         else:
-            players = (rAgent.rAgent(qG, seed), 'human')
+            players = (rAgent.rAgent(), 'human')
     if args.v:
-        players = (rAgent.rAgent(qG, seed), rAgent.rAgent(qG, seed))
-
-    result = playGame(players, qG)
-    if result.split(" ")[0] == "WON":
-        print(f'Game is WON by player {result.split(" ")[1]}!')
+        players = (rAgent.rAgent(), rAgent.rAgent())
+    if args.t:
+        agent = selectAgentIndex(int(args.t[0]))
+        nEpisodes = 10
+        trainAgent(agent, None, nEpisodes, seed)
     else:
-        print(f'Game ended in a DRAW')
+        playManualGame(players, qG, seed)
 
-def playGame(players, qG):
+def selectAgentIndex(index):
+    iToA = {0: rAgent.rAgent(), 1: TDLA.TDLambdaAgent()}
+
+    return iToA[index]
+
+
+def playTrainingGame(agent, envAgent, qG):
+    placementPiece = None
+    playerInTurn = bool(random.getrandbits(1))
+    agent = agent
+    envAgent = envAgent
+
+    z = 0
+
+    while qG.isDone != True:
+        #Training Agent
+        if int(playerInTurn) == 0:
+            (placement, piece) = agent.act()
+            if placement != None:
+                placement = (placement[0], placement[1])
+                qG.placePieceAt(placementPiece, placement)
+
+            if qG.isDone:
+                break
+
+            if piece != None:
+                placementPiece = qG.takePieceFromPool(piece)
+
+        #EnvAgent
+        else:
+            (placement, piece) = envAgent.act()
+            if placement != None:
+                placement = (placement[0], placement[1])
+                qG.placePieceAt(placementPiece, placement)
+
+            if qG.isDone:
+                # playerInTurn = not playerInTurn
+                break
+
+            if piece != None:
+                placementPiece = qG.takePieceFromPool(piece)
+
+        playerInTurn = not playerInTurn
+
+    qG.printGame()
+    if qG.isWon:
+        return int(playerInTurn)
+    else:
+        return -1
+
+def playManualGame(players, qG, seed):
+    random.seed(seed)
     startOfGame = True
     placementPiece = None
     playerInTurn = False
@@ -43,11 +98,10 @@ def playGame(players, qG):
     elif players[1] != "human":
         agent = players[1]
 
-    print(playerInTurn)
-    print(players[int(playerInTurn)])
+    agent.setBoard(qG)
 
     while qG.isDone != True:
-        print(f'PLAYER TURN: {int(playerInTurn)}')
+        #print(f'PLAYER TURN: {int(playerInTurn)}')
         #Human control
         if players[int(playerInTurn)] == 'human':
             if not startOfGame:
@@ -77,17 +131,33 @@ def playGame(players, qG):
             if piece != None:
                 placementPiece = qG.takePieceFromPool(piece)
             #Missing termination condition?!
-            print(f"PLACEMENT {placement}, PIECE: {placementPiece}")
 
         playerInTurn = not playerInTurn
         startOfGame = False
 
     qG.printGame()
     if qG.isWon:
-        return f'WON {int(playerInTurn)}'
+        print(f'WON by player {int(playerInTurn)}')
     else:
         return f'DRAW'
 
+def trainAgent(agent, envAgent, nEpisodes, seed):
+    random.seed(seed)
+
+    for episode in range(nEpisodes):
+        qG = QG.GameBoard()
+        envAgent = selectAgentIndex(0)
+        envAgent.setBoard(qG)
+        agent.setBoard(qG)
+
+        players = (agent, envAgent)
+
+        result = playTrainingGame(agent, envAgent, qG)
+
+        if result == -1:
+            print(f'Game was a draw')
+        else:
+            print(f'{players[result]} WON')
 
 
 def runTests():
@@ -102,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', nargs=1, help="sets the game up for 1 human player vs 1 computer player. Human goes <argument>")
     parser.add_argument('-v', nargs=2, help="sets the game up for 2 Agents <Agent1>, <Agent2>")
     parser.add_argument('-s', nargs=1, help="sets the seed for the randomizer")
+    parser.add_argument('-t', nargs=1, help="sets the game up for training an Agent of type <agentIndex>")
 
     args = parser.parse_args()
 

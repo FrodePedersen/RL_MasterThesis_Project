@@ -250,8 +250,6 @@ class GameBoard():
             validIndeces = (self.simpleRep == 0).nonzero().tolist()
 
         validPieces = [p for p,v in self.piecePool.items() if v != None]
-        print(f'VALID PIECES: {validPieces}')
-        print(f'AMOUTN OF VALID: {len(validPieces)}')
         if len(validPieces) < 1:
             validPieces = [None] #End of game has no valid pieces, only 1 index
         result = []
