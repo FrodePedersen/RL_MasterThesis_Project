@@ -10,6 +10,7 @@ class rAgent():
 
     def act(self):
         validMoves = self.qG.collectValidMoves() #List containing all permutations of (piece to give, valid placement of piece given)
+        #if validMoves == Noneprint(f'')
         return random.choice(validMoves) #tuple: (index to place, piece to give)
 
     def __str__(self):

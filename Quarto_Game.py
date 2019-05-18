@@ -1,5 +1,7 @@
 from bitarray import bitarray
 import torch
+import copy
+import random
 
 class Piece():
 
@@ -42,11 +44,18 @@ class Piece():
         return f'{height} {color} {shape} {indentation}'
 
 
-class GameBoard():
+class GameBoard(object):
 
     def __init__(self):
+        self.ID = 'OLD'
+        self.simpleBoardRep = torch.zeros((4, 4), dtype=torch.int32)
+        self.simplePieceRep = torch.ones((4, 4), dtype=torch.int32)
+        self.simplePickedPieceRep = torch.zeros((4, 4), dtype=torch.int32)
 
-        self.simpleRep = torch.zeros((4,4), dtype=torch.int32)
+        self.firstMove = True
+
+        self.verticalSwap = False
+        self.horizontalSwap = False
 
         self.boardMatrices = {'OCCUPIED': BoardMatrix(matType='OCCUPIED'),
                               'HEIGHT': BoardMatrix(matType='HEIGHT'),
@@ -84,12 +93,31 @@ class GameBoard():
         self.piecePool['SHORT BLACK SQUARE INDENTED'] = p8
         self.piecePool['TALL WHITE ROUND FILLED'] =     p9
         self.piecePool['TALL WHITE ROUND INDENTED'] =   p10
-        self.piecePool['TALL WHITE SQUARE FILLED'] =   p11
-        self.piecePool['TALL WHITE SQUARE INDENTED'] = p12
+        self.piecePool['TALL WHITE SQUARE FILLED'] =    p11
+        self.piecePool['TALL WHITE SQUARE INDENTED'] =  p12
         self.piecePool['TALL BLACK ROUND FILLED'] =     p13
         self.piecePool['TALL BLACK ROUND INDENTED'] =   p14
         self.piecePool['TALL BLACK SQUARE FILLED'] =    p15
         self.piecePool['TALL BLACK SQUARE INDENTED'] =  p16
+
+        self.stringToIndex = {}
+
+        self.stringToIndex['SHORT WHITE ROUND FILLED'] = 1
+        self.stringToIndex['SHORT WHITE ROUND INDENTED'] = 2
+        self.stringToIndex['SHORT WHITE SQUARE FILLED'] = 3
+        self.stringToIndex['SHORT WHITE SQUARE INDENTED'] = 4
+        self.stringToIndex['SHORT BLACK ROUND FILLED'] = 5
+        self.stringToIndex['SHORT BLACK ROUND INDENTED'] = 6
+        self.stringToIndex['SHORT BLACK SQUARE FILLED'] = 7
+        self.stringToIndex['SHORT BLACK SQUARE INDENTED'] = 8
+        self.stringToIndex['TALL WHITE ROUND FILLED'] = 9
+        self.stringToIndex['TALL WHITE ROUND INDENTED'] = 10
+        self.stringToIndex['TALL WHITE SQUARE FILLED'] = 11
+        self.stringToIndex['TALL WHITE SQUARE INDENTED'] = 12
+        self.stringToIndex['TALL BLACK ROUND FILLED'] = 13
+        self.stringToIndex['TALL BLACK ROUND INDENTED'] = 14
+        self.stringToIndex['TALL BLACK SQUARE FILLED'] = 15
+        self.stringToIndex['TALL BLACK SQUARE INDENTED'] = 16
 
         #Index to String mapping
         self.indexToString = {}
@@ -187,7 +215,7 @@ class GameBoard():
         for i in range(4):
             row = ""
             for j in range(4):
-                boardValue = self.simpleRep[(i,j)].item()
+                boardValue = self.simpleBoardRep[(i, j)].item()
                 if boardValue != 0:
                     piece = self.indexToPiece[boardValue]
                     encoding = piece.attributes.tolist()
@@ -208,12 +236,17 @@ class GameBoard():
         index = 1
         for k,v in self.piecePool.items():
             if v != None:
-                print(f'index: {self.pieceToIndex[v]}, encoding: {v.attributes}, String Rep: {k}')
+                print(f'index: {self.stringToIndex[str(v)]}, encoding: {v.attributes}, String Rep: {k}')
             else:
                 print(f'index: {index} TAKEN')
             index += 1
 
     def translateSimpleToComplex(self, simple):
+        #print(f"SSSSIMPLE: {simple}")
+        simpleBoardRep = simple[0]
+        simplePiecePool = simple[1]
+        simplePickedPiece = simple[2]
+
         boardMatrices = {'OCCUPIED': BoardMatrix(matType='OCCUPIED'),
                          'HEIGHT': BoardMatrix(matType='HEIGHT'),
                          'COLOR': BoardMatrix(matType='COLOR'),
@@ -222,7 +255,7 @@ class GameBoard():
 
         for i in range(4):
             for j in range(4):
-                pieceIndex = simple[(i,j)].item()
+                pieceIndex = simpleBoardRep[(i,j)].item()
                 if pieceIndex == 0:
                     continue
                 else:
@@ -241,25 +274,72 @@ class GameBoard():
                     if ind == 'INDENTED':
                         boardMatrices['INDENTATION'].placePieceAt((i, j))
 
-        return boardMatrices
+        return (boardMatrices, simplePiecePool, simplePickedPiece)
+
+    def translateComplexToTensors(self, complexRep):
+        boardMats = complexRep[0]
+        piecePool = complexRep[1]
+        pickedPiece = complexRep[2]
+
+        tens = torch.zeros((7,4,4))#,  dtype=torch.float64, requires_grad=True)
+        #print(f'tens shape: {tens.size()}')
+        tens[0] = boardMats['OCCUPIED'].getMatrix().clone()
+        tens[1] = boardMats['HEIGHT'].getMatrix().clone()
+        tens[2] = boardMats['COLOR'].getMatrix().clone()
+        tens[3] = boardMats['SHAPE'].getMatrix().clone()
+        tens[4] = boardMats['INDENTATION'].getMatrix().clone()
+        tens[5] = piecePool.clone()
+        tens[6] = pickedPiece.clone()
+
+        outputTensor = torch.zeros((1,7,4,4))
+        outputTensor[0] = tens
+        outputTensor.requires_grad = True
+        #print(f'outputTens: {outputTensor}')
+        return outputTensor
+
+    def getBoardStateSimple(self):
+        return (self.simpleBoardRep.clone(), self.simplePieceRep.clone(), self.simplePickedPieceRep.clone())
+
+    def calculateSymmetries(self, simpleReps):
+        simpleBoardRep = simpleReps[0]
+        if self.horizontalSwap:
+            simpleBoardRep = simpleBoardRep.flip(0)
+        if self.verticalSwap:
+            simpleBoardRep = simpleBoardRep.flip(1)
+
+        return (simpleBoardRep, simpleReps[1], simpleReps[2])
+
+    def translateSymmetryToBoardState(self, position):
+        row, col = position[0], position[1]
+        if self.horizontalSwap:
+            row = abs(3 - row)
+        if self.verticalSwap:
+            col = abs(3-col)
+
+        return((row,col))
+
 
     #Creates a list of all valid combinations of free indeces and pieces. returns list of tuples: [(indx, piece), (indx, piece) ... ]
     def collectValidMoves(self):
-        validIndeces = [None] #Start of the game has no indeces
-        if not self.simpleRep.sum() == 0 or None in self.piecePool.values():
-            validIndeces = (self.simpleRep == 0).nonzero().tolist()
+        validIndeces = []
+        if not self.simpleBoardRep.sum() == 0 or None in self.piecePool.values(): #Checks if the board is clean, if so don't place
+            validIndeces = (self.simpleBoardRep == 0).nonzero().tolist()
+
+        if len(validIndeces) < 1:
+            validIndeces = [None]  # Start of the game has no indeces
 
         validPieces = [p for p,v in self.piecePool.items() if v != None]
         if len(validPieces) < 1:
             validPieces = [None] #End of game has no valid pieces, only 1 index
+
         result = []
+
         for index in validIndeces:
             for piece in validPieces:
                 result.append((index, piece))
 
+        #print(f'### COLLECTVALID: LEN: {len(result)}')#, list: {result}')
         return result
-
-
 
     def getBoardMatrices(self):
         return self.boardMatrices
@@ -268,55 +348,99 @@ class GameBoard():
         return self.piecePool
 
     def takePieceFromPool(self, pieceString):
-        piece = self.piecePool[pieceString]
-        self.piecePool[pieceString] = None
-        return piece
+        clonePiecePool = copy.deepcopy(self.piecePool)
+        clonePieceRep = self.simplePieceRep.clone()
+
+        piece = clonePiecePool[pieceString]
+        p_index = self.stringToIndex[pieceString] - 1
+        clonePiecePool[pieceString] = None
+        rowIdx = int(p_index / 4)
+        colIdx = p_index % 4
+        clonePieceRep[(rowIdx, colIdx)] = 0
+        clonePickedPieceRep = torch.zeros((4, 4), dtype=torch.int32)
+        clonePickedPieceRep[(rowIdx, colIdx)] = 1
+
+        return piece, clonePiecePool, clonePieceRep, clonePickedPieceRep
 
     def getBoardMatriceFor(self, boardString):
         return self.boardMatrices[boardString]
 
     def placePieceAt(self, piece, position):
+        #Set symmetry direction of first move
+        if self.firstMove:
+            self.firstMove = False
+            row, col = position[0], position[1]
+            if row >= 2:
+                self.horizontalSwap = True
+            if col >= 2:
+                self.verticalSwap = True
 
-        if piece in self.piecePool:
-            raise Exception(f'PIECE {piece} IN PIECE POOL')
+        cloneSimpleBoardRep = self.simpleBoardRep.clone()
+        cloneBoardMats = {}
 
+        #if piece in self.piecePool:
+        #    raise Exception(f'PIECE {piece} IN PIECE POOL')
         if self.boardMatrices['OCCUPIED'][position] == 1:
             raise Exception(f'POSITION {position} ALREADY TAKEN')
 
-        self.simpleRep[position] = self.pieceToIndex[piece]
-        #print(self.simpleRep)
+        cloneSimpleBoardRep[position] = self.stringToIndex[str(piece)]
+        #print(self.simpleBoardRep)
 
         HEIGHT = f'{piece}'.split(' ')[0]
         COLOR = f'{piece}'.split(' ')[1]
         SHAPE = f'{piece}'.split(' ')[2]
         INDENTATION = f'{piece}'.split(' ')[3]
 
-        self.boardMatrices['OCCUPIED'].placePieceAt(position)
+        cloneBoardMats['OCCUPIED'] = copy.deepcopy(self.boardMatrices['OCCUPIED'])
+        cloneBoardMats['HEIGHT'] = copy.deepcopy(self.boardMatrices['HEIGHT'])
+        cloneBoardMats['COLOR'] = copy.deepcopy(self.boardMatrices['COLOR'])
+        cloneBoardMats['SHAPE'] = copy.deepcopy(self.boardMatrices['SHAPE'])
+        cloneBoardMats['INDENTATION'] = copy.deepcopy(self.boardMatrices['INDENTATION'])
+
+        cloneBoardMats['OCCUPIED'].placePieceAt(position)
 
         if HEIGHT == 'TALL':
-            self.boardMatrices['HEIGHT'].placePieceAt(position)
+            cloneBoardMats['HEIGHT'].placePieceAt(position)
         if COLOR == 'BLACK':
-            self.boardMatrices['COLOR'].placePieceAt(position)
+            cloneBoardMats['COLOR'].placePieceAt(position)
         if SHAPE == 'SQUARE':
-            self.boardMatrices['SHAPE'].placePieceAt(position)
+            cloneBoardMats['SHAPE'].placePieceAt(position)
         if INDENTATION == 'INDENTED':
-            self.boardMatrices['INDENTATION'].placePieceAt(position)
+            cloneBoardMats['INDENTATION'].placePieceAt(position)
 
+        return cloneSimpleBoardRep, cloneBoardMats
+        '''
         if self.isWinningMove(position):
             self.isWon = True
             self.isDone = True
         elif self.isDraw():
-            self.isDone = True
+            game.isDone = True
+            
+        return 
+        '''
 
-    def isWinningMove(self, position):
+    def storeState(self, **args):
+        if 'boardmats' in args.keys():
+            self.boardMatrices = args['boardmats']
+        if 'piecePool' in args.keys():
+            self.piecePool = args['piecePool']
+        if 'simpleBoardRep' in args.keys():
+            self.simpleBoardRep = args['simpleBoardRep']
+        if 'simplePieceRep' in args.keys():
+            self.simplePieceRep = args['simplePieceRep']
+        if 'simplePickedPieceRep' in args.keys():
+            self.simplePickedPieceRep = args['simplePickedPieceRep']
+
+
+    def isWinningMove(self, boardMatrices):
         #Checking Rows
         for i in range(4):
-            if self.boardMatrices['OCCUPIED'][i].sum() == 4:
+            if boardMatrices['OCCUPIED'][i].sum() == 4:
                 # check the rows in each type
-                rowHeight = self.boardMatrices['HEIGHT'][i].sum()
-                rowColor = self.boardMatrices['COLOR'][i].sum()
-                rowShape = self.boardMatrices['SHAPE'][i].sum()
-                rowIndentation = self.boardMatrices['INDENTATION'][i].sum()
+                rowHeight = boardMatrices['HEIGHT'][i].sum()
+                rowColor = boardMatrices['COLOR'][i].sum()
+                rowShape = boardMatrices['SHAPE'][i].sum()
+                rowIndentation = boardMatrices['INDENTATION'][i].sum()
                 if rowHeight == 0 or rowHeight == 4:
                     return True
                 if rowColor == 0 or rowColor == 4:
@@ -327,14 +451,14 @@ class GameBoard():
                     return True
 
         #Checking Columns
-        transposedOccMats = self.boardMatrices['OCCUPIED'].t()
+        transposedOccMats = boardMatrices['OCCUPIED'].t()
         for i in range(4):
             if transposedOccMats[i].sum() == 4:
                 #check the columns in each type
-                colHeight = self.boardMatrices['HEIGHT'].t()[i].sum()
-                colColor = self.boardMatrices['COLOR'].t()[i].sum()
-                colShape = self.boardMatrices['SHAPE'].t()[i].sum()
-                colIndentation = self.boardMatrices['INDENTATION'].t()[i].sum()
+                colHeight = boardMatrices['HEIGHT'].t()[i].sum()
+                colColor = boardMatrices['COLOR'].t()[i].sum()
+                colShape = boardMatrices['SHAPE'].t()[i].sum()
+                colIndentation = boardMatrices['INDENTATION'].t()[i].sum()
                 if colHeight == 0 or colHeight == 4:
                     return True
                 if colColor == 0 or colColor == 4:
@@ -345,12 +469,12 @@ class GameBoard():
                     return True
 
         #checking diagonal
-        if self.boardMatrices['OCCUPIED'].diag().sum() == 4:
+        if boardMatrices['OCCUPIED'].diag().sum() == 4:
             #checking diagonal in each type
-            diagHeight = self.boardMatrices['HEIGHT'].diag().sum()
-            diagColor = self.boardMatrices['COLOR'].diag().sum()
-            diagShape = self.boardMatrices['SHAPE'].diag().sum()
-            diagIndentation = self.boardMatrices['INDENTATION'].diag().sum()
+            diagHeight = boardMatrices['HEIGHT'].diag().sum()
+            diagColor = boardMatrices['COLOR'].diag().sum()
+            diagShape = boardMatrices['SHAPE'].diag().sum()
+            diagIndentation = boardMatrices['INDENTATION'].diag().sum()
             if diagHeight == 0 or diagHeight == 4:
                 return True
             if diagColor == 0 or diagColor == 4:
@@ -361,12 +485,12 @@ class GameBoard():
                 return True
 
         #checking reverse diagonal
-        if self.boardMatrices['OCCUPIED'].rot90().diag().sum() == 4:
+        if boardMatrices['OCCUPIED'].rot90().diag().sum() == 4:
             # checking reverse diagonal in each type
-            revdiagHeight = self.boardMatrices['HEIGHT'].rot90().diag().sum()
-            revdiagColor = self.boardMatrices['COLOR'].rot90().diag().sum()
-            revdiagShape = self.boardMatrices['SHAPE'].rot90().diag().sum()
-            revdiagIndentation = self.boardMatrices['INDENTATION'].rot90().diag().sum()
+            revdiagHeight = boardMatrices['HEIGHT'].rot90().diag().sum()
+            revdiagColor = boardMatrices['COLOR'].rot90().diag().sum()
+            revdiagShape = boardMatrices['SHAPE'].rot90().diag().sum()
+            revdiagIndentation = boardMatrices['INDENTATION'].rot90().diag().sum()
             if revdiagHeight == 0 or revdiagHeight == 4:
                 return True
             if revdiagColor == 0 or revdiagColor == 4:
@@ -379,10 +503,48 @@ class GameBoard():
         return False
 
     def isDraw(self):
-        if not self.isWon and self.boardMatrices['OCCUPIED'].getMatrix().sum() == 16:
+        if not self.isDone and self.boardMatrices['OCCUPIED'].getMatrix().sum() == 16:
             return True
 
         return False
+
+    def randomInitOfGame(self):
+        amount_of_moves = random.randint(0,15)
+        placementIndex = self.getBoardStateSimple()[2].view(-1).nonzero()
+        placementPiece = None
+
+        if placementIndex.size()[0] > 0:
+            placementIndex = placementIndex.item() + 1
+            placementPiece = self.indexToPiece[placementIndex]
+
+        for i in range(amount_of_moves):
+            (placement, piece) = random.choice(self.collectValidMoves())
+
+
+            if placement != None:
+                placement = (placement[0], placement[1])
+                newSimpleBoardRep, newBoardMats = self.placePieceAt(placementPiece, placement)
+                self.storeState(boardmats=newBoardMats, simpleBoardRep=newSimpleBoardRep)
+
+                #print(f'SIMPLE REP: {newSimpleBoardRep}')
+
+                if self.isWinningMove(newBoardMats):
+                    self.isDone = True
+                    return placementPiece
+
+            '''
+            if qG.isDone:
+                # playerInTurn = not playerInTurn
+                break
+            '''
+
+            if piece != None:
+                placementPiece, newPiecePool, newPieceRep, newPickedPieceRep = self.takePieceFromPool(piece)
+                self.storeState(piecePool=newPiecePool, simplePieceRep=newPieceRep,
+                                simplePickedPieceRep=newPickedPieceRep)
+
+        return placementPiece
+
 
 
 class BoardMatrix():

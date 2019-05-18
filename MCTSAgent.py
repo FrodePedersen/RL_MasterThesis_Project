@@ -4,19 +4,21 @@ import torch
 import Quarto_Game as QG
 import copy
 
+
 class TDLambdaAgent():
 
-    def __init__(self, functionAproxModel):
-        self.currentNN = functionAproxModel
-        self.targetNN = functionAproxModel
+    def __init__(self):
+        self.currentNN = NN.CNN_Model()
+        self.targetNN = NN.CNN_Model()
         self.qG = None
         self.lparams = {}
+
     '''
     def act(self):
         validMoves = self.qG.collectValidMoves() #List containing all permutations of (piece to give, valid placement of piece given)
         return random.choice(validMoves) #tuple: (index to place, piece to give)
     '''
-    
+
     def act(self):
         validMoves = self.qG.collectValidMoves()  # List containing all permutations of (piece to give, valid placement of piece given)
         bestMove = None
@@ -35,7 +37,7 @@ class TDLambdaAgent():
         bestScore = torch.tensor([0])
         worstScore = torch.tensor([1])
         bestMove = None
-        #print(f'## AMOUNT OF VALID MOVES: {len(validMoves)}')
+        # print(f'## AMOUNT OF VALID MOVES: {len(validMoves)}')
         placementIndex = self.qG.getBoardStateSimple()[2].view(-1).nonzero()
         placementPiece = None
 
@@ -44,7 +46,7 @@ class TDLambdaAgent():
             placementPiece = self.qG.indexToPiece[placementIndex]
 
         for (placement, piece) in validMoves:
-            #testBoard = copy.deepcopy(self.qG)
+            # testBoard = copy.deepcopy(self.qG)
             newBoardMats = self.qG.getBoardMatrices()
             newSimpleBoardRep = self.qG.getBoardStateSimple()[0]
             if placement != None:
@@ -56,21 +58,19 @@ class TDLambdaAgent():
             if piece != None:
                 placementPiece, newPiecePool, newPieceRep, newPickedPieceRep = self.qG.takePieceFromPool(piece)
 
-
-
             self.currentNN.zero_grad()
             self.currentNN.eval()
-            inputTens = self.qG.translateComplexToTensors(self.qG.translateSimpleToComplex(self.qG.calculateSymmetries((newSimpleBoardRep, newPieceRep, newPickedPieceRep))))
-            #print(f'#'*25)
-            #print(f'INPUTTENS: {inputTens}')
-            #print(f'ARE WE IN HERE AT ALL?!')
-            #print(f'INPUT tENS.SIZE: {inputTens.size()}')
-            #print(f'input tens: {inputTens}')
+            inputTens = self.qG.translateComplexToTensors(self.qG.translateSimpleToComplex(
+                self.qG.calculateSymmetries((newSimpleBoardRep, newPieceRep, newPickedPieceRep))))
+            # print(f'#'*25)
+            # print(f'INPUTTENS: {inputTens}')
+            # print(f'ARE WE IN HERE AT ALL?!')
+            # print(f'INPUT tENS.SIZE: {inputTens.size()}')
+            # print(f'input tens: {inputTens}')
             moveScore = self.currentNN(inputTens)
 
-
-            #TODO: ALWAYS SAME MoveScore?!?!?!
-            #print(f'MoveScore: {moveScore}')
+            # TODO: ALWAYS SAME MoveScore?!?!?!
+            # print(f'MoveScore: {moveScore}')
             if moveScore.item() >= bestScore.item():
                 bestScore = moveScore
                 bestMove = (placement, piece)
@@ -78,11 +78,10 @@ class TDLambdaAgent():
             if moveScore.item() <= worstScore.item():
                 worstScore = moveScore
 
-        #print(f'Best Move: {bestMove}')
-        #print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
+        # print(f'Best Move: {bestMove}')
+        # print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
 
         return bestMove
-
 
     def setBoard(self, qG):
         self.qG = qG
@@ -90,27 +89,6 @@ class TDLambdaAgent():
     def set_learningParams(self, **lparams):
         for k, v in lparams:
             self.lparams[k] = v
-
-    def translateComplexToTensors(self, complexRep):
-        boardMats = complexRep[0]
-        piecePool = complexRep[1]
-        pickedPiece = complexRep[2]
-
-        tens = torch.zeros((7,4,4))#,  dtype=torch.float64, requires_grad=True)
-        #print(f'tens shape: {tens.size()}')
-        tens[0] = boardMats['OCCUPIED'].getMatrix().clone()
-        tens[1] = boardMats['HEIGHT'].getMatrix().clone()
-        tens[2] = boardMats['COLOR'].getMatrix().clone()
-        tens[3] = boardMats['SHAPE'].getMatrix().clone()
-        tens[4] = boardMats['INDENTATION'].getMatrix().clone()
-        tens[5] = piecePool.clone()
-        tens[6] = pickedPiece.clone()
-
-        outputTensor = torch.zeros((1,7,4,4))
-        outputTensor[0] = tens
-        outputTensor.requires_grad = True
-        return outputTensor
-
 
     def __str__(self):
         return f'TDLambdaAgent'
