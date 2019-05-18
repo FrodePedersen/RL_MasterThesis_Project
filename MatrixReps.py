@@ -1,6 +1,6 @@
 from Quarto_Game import BoardMatrix
 from Quarto_Game import Piece
-from bitarray import bitarray
+#from bitarray import bitarray
 import numpy as np
 
 class Strategy8Matrices():

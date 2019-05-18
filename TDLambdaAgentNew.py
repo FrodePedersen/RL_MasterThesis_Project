@@ -53,7 +53,10 @@ class TDLambdaAgent():
             #print(f'BEFORE SYMS: {torch.stack([newBoardRep, newPiecePool, newPickedPieceRep])}')
             inputTens = self.qG.calculateSymmetries(torch.stack([newBoardRep, newPiecePool, newPickedPieceRep]))
             if torch.cuda.is_available():
-                inputTens.cuda()
+                #print(f'ARE WEHERERERE?!?!?!?!?!?')
+                inputTens = inputTens.cuda()
+            #print(f'IS CUDA? {torch.cuda.is_available()}')
+            #print(f'INPUT TENS: {inputTens}')
             #print(f'DID WE GET SYMS? {inputTens}')
             moveScore = self.currentNN(inputTens)
 
@@ -67,7 +70,7 @@ class TDLambdaAgent():
                 worstScore = moveScore
 
         # print(f'Best Move: {bestMove}')
-        #print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
+        print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
 
         return bestMove
 

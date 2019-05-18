@@ -1,6 +1,6 @@
 from distutils.command.check import check
 
-from bitarray import bitarray
+#from bitarray import bitarray
 import torch
 import copy
 import random

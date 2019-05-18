@@ -301,10 +301,19 @@ def trainNetwork(transition, agent, qG):
     next_state = qG.calculateSymmetries(transition.next_state)
     z_i = transition.z
     is_terminal = transition.terminal
-
+	
+    g = agent.lparams['gamma']
+    a = agent.lparams['alpha']
+	
+    if torch.cuda.is_available():
+        state = state.cuda()
+        next_state = next_state.cuda()
+        g = g.cuda()
+        a = a.cuda()
+        reward  = reward.cuda()
+		
     be = agent.currentNN(state)
     af = agent.currentNN(next_state)
-    g = agent.lparams['gamma']
     #print(f'TORCH.CUDA AVAILABLE? {torch.cuda.is_available()}')
     #print(f'g: {g}, be: {be}, af: {af}')
 
@@ -323,6 +332,8 @@ def trainNetwork(transition, agent, qG):
     #i = 0
 
     for paramf, z in zip(agent.currentNN.parameters(), z_i):
+        if torch.cuda.is_available():
+            z.data = z.data.cuda()
         paramf.data += agent.lparams['alpha'] * z.data * delta_error.view(-1)
         #print(f'WEIGHTS: {paramf}')
         #i += 1
@@ -772,7 +783,7 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
             #print(f'CALC SYMMETRIES?! {inputTens}')
             agent.currentNN.zero_grad()
             if torch.cuda.is_available():
-                inputTens.cuda()
+                inputTens = inputTens.cuda()
             v_Sw = agent.currentNN(inputTens)
             #print(v_Sw)
             #print(f'v_Sw: {v_Sw}')
