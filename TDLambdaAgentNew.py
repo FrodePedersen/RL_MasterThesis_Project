@@ -12,6 +12,7 @@ class TDLambdaAgent():
         self.targetNN = functionAproxModel
         self.qG = None
         self.lparams = {}
+        self.trainingAgent = False
 
     def act(self):
         validMoves = self.qG.collectValidMoves()  # List containing all permutations of (piece to give, valid placement of piece given)
@@ -70,7 +71,8 @@ class TDLambdaAgent():
                 worstScore = moveScore
 
         # print(f'Best Move: {bestMove}')
-        print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
+        if self.trainingAgent:
+            print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
 
         return bestMove
 

@@ -19,15 +19,15 @@ class relu_Model_endSigmoid(nn.Module):
         self.fc2 = nn.Linear(9*4*4, 16)
         self.fc3 = nn.Linear(16, 1)
 
-        nn.init.xavier_uniform_(self.fc1.weight, nn.init.calculate_gain('relu'))
-        nn.init.xavier_uniform_(self.fc2.weight, nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self.fc1.weight, nn.init.calculate_gain('sigmoid'))
+        nn.init.xavier_uniform_(self.fc2.weight, nn.init.calculate_gain('sigmoid'))
         nn.init.xavier_uniform_(self.fc3.weight, nn.init.calculate_gain('sigmoid'))
         #self.conv2 = nnConv2d
 
     def forward(self, input):
         x = input.view(-1, 3 * 4 * 4)
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
+        x = torch.sigmoid(self.fc1(x))
+        x = torch.sigmoid(self.fc2(x))
         x = torch.sigmoid(self.fc3(x))
         return x
 

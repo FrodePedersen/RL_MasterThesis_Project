@@ -278,6 +278,7 @@ def playTrainingGame(agent, envAgent, qG, placementPiece):
             agentTookTurn = False
             envTookFollowupTurn = False
             transition = Transition(S, reward, S_PRIME, z_weights, qG.isDone)
+            print(f'Turn Number: {turnNumber}')
             trainNetwork(transition, agent)# 5, optimizer=None)
             S = S_PRIME
 
@@ -292,6 +293,7 @@ def playTrainingGame(agent, envAgent, qG, placementPiece):
 def trainNetwork(transition, agent, qG):
     agent.currentNN.train()
     agent.targetNN.eval()
+
 
     # print(f'training: {i}')
     agent.currentNN.zero_grad()
@@ -311,7 +313,8 @@ def trainNetwork(transition, agent, qG):
         g = g.cuda()
         a = a.cuda()
         reward  = reward.cuda()
-		
+
+	#WEIRD.... ALL be is the SAME.
     be = agent.currentNN(state)
     af = agent.currentNN(next_state)
     #print(f'TORCH.CUDA AVAILABLE? {torch.cuda.is_available()}')
@@ -319,11 +322,14 @@ def trainNetwork(transition, agent, qG):
 
 
     if is_terminal:
-        delta_error = reward # - agent.currentNN(state) #Fix! Remove agent term
+        if reward > 0:
+            delta_error = reward
+        else:
+            delta_error = reward - be
     else:
         delta_error = reward + (agent.lparams['gamma'] * af ) - be
 
-    #print(f'delta_error: {delta_error.view(-1)}')
+    print(f'delta_error: {delta_error.view(-1)}')
     #a = agent.lparams['alpha']
     #print(f'Gradients 2222: {a * z_i[2].data * delta_error.view(-1)}')
     #rint(f'Gradients 3333: {a * z_i[3].data * delta_error.view(-1)}')
@@ -741,15 +747,21 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
     agentTookTurn = False
     envTookFollowupTurn = False
 
+    agent.trainingAgent = True
+    envAgent.trainingAgent = False
+
+
     winner = -1
     turnNumber = 0
     z_weights = []
-
+    S = None
+    S_PRIME = None
 
     reward = torch.tensor([0.0])
 
     while qG.isDone != True:
         turnNumber += 1
+        print(f'TurnNumber Beging: {turnNumber}, playerInTurn: {int(playerInTurn)}')
         #Training Agent
         if int(playerInTurn) == 0:
             S = torch.stack([qG.boardRep.clone(), qG.piecePoolRep.clone(), qG.pickedPieceRep.clone()])
@@ -798,10 +810,9 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
                     z_weights[z_i] = g * l * z_weights[z_i] + par.grad.clone()
 
             S_PRIME = torch.stack([qG.boardRep.clone(), qG.piecePoolRep.clone(), qG.pickedPieceRep.clone()])
-            #agentTookTurn = False
-            #envTookFollowupTurn = False
-            transition = Transition(S, reward, S_PRIME, z_weights, qG.isDone)
-            trainNetwork(transition, agent, qG)
+
+            agentTookTurn = True
+            envTookFollowupTurn = False
 
         #EnvAgent
         else:
@@ -827,8 +838,11 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
             if agentTookTurn:
                 envTookFollowupTurn = True
 
-        #if agentTookTurn and (envTookFollowupTurn or qG.isDone):
-
+        if (agentTookTurn and qG.isDone) or (envTookFollowupTurn):
+            transition = Transition(S, reward, S_PRIME, z_weights, qG.isDone)
+            print(f'turnNumber: {turnNumber}')
+            trainNetwork(transition, agent, qG)
+            agentTookTurn = False
 
         if qG.isDone or qG.isDraw():
             break
