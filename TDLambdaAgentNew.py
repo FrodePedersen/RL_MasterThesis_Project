@@ -71,8 +71,8 @@ class TDLambdaAgent():
                 worstScore = moveScore
 
         # print(f'Best Move: {bestMove}')
-        if self.trainingAgent:
-            print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
+        #if self.trainingAgent:
+        #    print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
 
         return bestMove
 
