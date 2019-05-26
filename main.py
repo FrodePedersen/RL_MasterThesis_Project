@@ -329,7 +329,7 @@ def trainNetwork(transition, agent, qG):
     else:
         delta_error = reward + (agent.lparams['gamma'] * af ) - be
 
-    #print(f'delta_error: {delta_error.view(-1)}')
+    print(f'delta_error: {delta_error.view(-1)}')
     #a = agent.lparams['alpha']
     #print(f'Gradients 2222: {a * z_i[2].data * delta_error.view(-1)}')
     #rint(f'Gradients 3333: {a * z_i[3].data * delta_error.view(-1)}')
@@ -732,7 +732,7 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
                 'target_state_dict': agent.targetNN.state_dict(),
                 'episode': episode,
                 'agent_lparams': agent.lparams,
-                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/Initial/agent{int(episode / 50)}.tar")
+                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/Second/agent{int(episode / 50)}.tar")
 
         if agent.lparams['alpha'] > 0.1:
             agent.lparams['alpha'] *= agent.lparams['alpha_decay']
