@@ -10,6 +10,7 @@ import argparse
 import rAgent
 import TDLambdaAgent as TDLA
 import TDLambdaAgentNew as TDLAN
+import DQNAgent as DQN
 import random
 import ReplayMemory as RP
 from ReplayMemory import Transition
@@ -111,35 +112,41 @@ def main(args):
 def selectAgentIndex(index, functionAproxModel):
     iToA = {0: rAgent.rAgent(),
             1: TDLA.TDLambdaAgent(functionAproxModel),
-            2: TDLAN.TDLambdaAgent(functionAproxModel)}
+            2: TDLAN.TDLambdaAgent(functionAproxModel),
+            3: DQN.DQNAgent(functionAproxModel)}
 
     return iToA[index]
 
 def functionIndex(index):
     model = {0: NN.CNN_Model(), 1: NN.relu_Model_endSigmoid()}[index]
     if torch.cuda.is_available():
-        model.cuda()
+        model = model.cuda()
     return model
 
-def conductTest(players, qG, seed, amount):
+def conductTest(players, qg, seed, amount):
     winner = []
     win_ratio = 0
     startTime = time.time()
+    print(f'players0 {players[0]}')
     players[0].lparams['epsilon'] = torch.tensor([0.0])
     if str(players[1]) != 'RANDOM AGENT':
         players[1].lparams['epsilon'] = torch.tensor([0.0])
     for i in range(amount):
-        gameStart= time.time()
-        winner.append(playTestGame(players, qG, seed))
-        print(f'testGame took {time.time() - gameStart} seconds')
-        qG = QG.GameBoard()
+        gameStart = time.time()
+        qG = qg.GameBoard()
         players[0].setBoard(qG)
         players[1].setBoard(qG)
+        winner.append(playTestGame(players, qG, seed).split(" ")[0])
+        print(f'testGame took {time.time() - gameStart} seconds')
+
+
 
     endTime = time.time()
 
     for i in range(len(winner)):
         print(winner[i])
+        print(f'winner: {winner[i]}, player: {players[0]}')
+        print(f'{winner[i] == players[0]}')
         if str(winner[i]) == str(players[0]):
             win_ratio += 1
 
@@ -161,24 +168,24 @@ def playTestGame(players, qG, seed):
 
     while qG.isDone != True:
         #Agent Control
-        (placement, piece) = players[int(playerInTurn)].act()
+        (placement, pieceIdx) = players[int(playerInTurn)].act()
         amountOfMoves += 1
         #print(f'placement: {placement}, piece: {piece}, playerTurn: {players[int(playerInTurn)]}')
         if placement != None:
             placement = (placement[0], placement[1])
-            newSimpleBoardRep, newBoardMats = qG.placePieceAt(placementPiece, placement)
+            newBoardRep = qG.placePieceAt(placementPiece, placement)
             # print(f'###BEFORE PLACEMENT: {qG.boardMatrices}')
-            qG.storeState(boardmats=newBoardMats, simpleBoardRep=newSimpleBoardRep)
+            qG.storeState(boardmat=newBoardRep)
             # print(f'###AFTER PLACEMENT!!: {qG.boardMatrices}')
-            if qG.isWinningMove(newBoardMats):
+            if qG.isWinningMove(newBoardRep):
                 winner = str(players[int(playerInTurn)]) + " player: " + str(int(playerInTurn))
                 qG.isDone = True
                 break
 
-        if piece != None:
-            placementPiece, newPiecePool, newPieceRep, newPickedPieceRep = qG.takePieceFromPool(piece)
-            qG.storeState(piecePool=newPiecePool, simplePieceRep=newPieceRep,
-                          simplePickedPieceRep=newPickedPieceRep)
+        if pieceIdx != None:
+            newPiecePool, newPickedPieceRep = qG.takePieceFromPool(pieceIdx)
+            qG.storeState(piecePool=newPiecePool, pickedPieceRep=newPickedPieceRep)
+            placementPiece = pieceIdx
         #Missing termination condition?!
 
         if qG.isDraw():
@@ -298,9 +305,10 @@ def trainNetwork(transition, agent, qG):
     # print(f'training: {i}')
     agent.currentNN.zero_grad()
     agent.targetNN.zero_grad()
-    state = qG.calculateSymmetries(transition.state)
+    state = transition.state#qG.calculateSymmetries(transition.state)
     reward = transition.reward
     next_state = qG.calculateSymmetries(transition.next_state)
+    next_state = next_state / 16 #Normalize input
     z_i = transition.z
     is_terminal = transition.terminal
 	
@@ -315,20 +323,23 @@ def trainNetwork(transition, agent, qG):
         reward  = reward.cuda()
 
 	#WEIRD.... ALL be is the SAME.
-    be = agent.currentNN(state)
-    af = agent.currentNN(next_state)
+    be = state #agent.currentNN(state)
+    af = agent.targetNN(next_state)
     #print(f'TORCH.CUDA AVAILABLE? {torch.cuda.is_available()}')
     #print(f'g: {g}, be: {be}, af: {af}')
 
-
+    #print(f'be: {be}')
     if is_terminal:
+        '''
         if reward > 0:
             delta_error = reward
         else:
-            delta_error = reward - be
+        '''
+        delta_error = reward - be
     else:
         delta_error = reward + (agent.lparams['gamma'] * af ) - be
 
+    print(f'reward: {reward}')
     print(f'delta_error: {delta_error.view(-1)}')
     #a = agent.lparams['alpha']
     #print(f'Gradients 2222: {a * z_i[2].data * delta_error.view(-1)}')
@@ -340,6 +351,9 @@ def trainNetwork(transition, agent, qG):
     for paramf, z in zip(agent.currentNN.parameters(), z_i):
         if torch.cuda.is_available():
             z.data = z.data.cuda()
+        print(f'z_data: {z.data}')
+        #print(f'z_0s: {(z == 0).nonzero().size()}')
+        #print(f'z size(): {len(z.view(-1))}')
         paramf.data += agent.lparams['alpha'] * z.data * delta_error.view(-1)
         #print(f'WEIGHTS: {paramf}')
         #i += 1
@@ -677,14 +691,24 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
     if str(agent) == 'TDLambdaAgentNEW':
         envAgent = TDLAN.TDLambdaAgent(functionIndex(fIndex))
         envAgent.lparams = agent.lparams.copy()
+    elif str(agent) == 'DQNAgent':
+        envAgent = DQN.DQNAgent(functionIndex(fIndex))
+        envAgent.lparams = agent.lparams.copy()
+
 
     arpm.push(envAgent)
     # print(f'AGENT LPARAMS: {agent.lparams}')
     placementPiece = None
     print(f'TYPE OF AGENT: {agent}')
-
+    eTimeBegin = time.time()
+    eTimeEnd = 0
     for episode in range(initEpisode, nEpisodes):
-        qG = None
+        #print(f'NEW GAME!!!!')
+        #print(f'NEW GAME!!!!')
+        #print(f'NEW GAME!!!!')
+        #print(f'NEW GAME!!!!')
+        qG = None#qg.GameBoard()
+
         while True:
             qG = qg.GameBoard()
             # print(f'INSIDE WHILE LOOP')
@@ -706,7 +730,7 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
 
         result = playTrainingGameNEW(agent, envAgent, qG, placementPiece)
 
-        print(f'ROUND {episode}')
+
 
         '''
         if result == -1:
@@ -719,26 +743,38 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
         else:
             raise Exception('INVALID RESULT')
         '''
-        agent.targetNN.load_state_dict(agent.currentNN.state_dict())
-        agent.targetNN.eval()
+
+
+
 
         newAgent = TDLAN.TDLambdaAgent(functionIndex(fIndex))
         newAgent.lparams = agent.lparams.copy()
         newAgent.currentNN.load_state_dict(agent.currentNN.state_dict().copy())
         arpm.push(newAgent)
 
+        #print(f'Lparams: {agent.lparams}')
         if episode % 50 == 0:
+            agent.targetNN.load_state_dict(agent.currentNN.state_dict().copy())
+            agent.targetNN.eval()
+            print(f'ROUND {episode}')
+            eTimeEnd = time.time() - eTimeBegin
+            print(f'eTimeEnd: {eTimeEnd}')
             torch.save({
+                'eTime': eTimeEnd,
                 'target_state_dict': agent.targetNN.state_dict(),
+                'current_state_dict': agent.currentNN.state_dict(),
                 'episode': episode,
-                'agent_lparams': agent.lparams,
-                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/Second/agent{int(episode / 50)}.tar")
+                'agent_lparams': agent.lparams.copy(),
+                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/tanh_first/agent{int(episode / 50)}.tar")
+            eTimeBegin = time.time()
+
 
         if agent.lparams['alpha'] > 0.1:
             agent.lparams['alpha'] *= agent.lparams['alpha_decay']
 
         if agent.lparams['epsilon'] > 0.1:
             agent.lparams['epsilon'] *= agent.lparams['epsilon_decay']
+
 
 def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
     placementPiece = placementPiece
@@ -793,10 +829,12 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
             #print(f'INPUT TENS: {S}')
             #print(f'SYMM: horizon, vertical {qG.horizontalSwap, qG.verticalSwap}')
             inputTens = qG.calculateSymmetries(S)
+            inputTens = inputTens / 16 #normalize input
             #print(f'CALC SYMMETRIES?! {inputTens}')
             agent.currentNN.zero_grad()
             if torch.cuda.is_available():
                 inputTens = inputTens.cuda()
+            agent.currentNN.train()
             v_Sw = agent.currentNN(inputTens)
             #print(v_Sw)
             #print(f'v_Sw: {v_Sw}')
@@ -828,6 +866,7 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
 
                 if qG.isWinningMove(newBoardRep):
                     winner = 0
+                    #reward = torch.tensor([-1.0])
                     qG.isDone = True
 
 
@@ -840,7 +879,7 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
                 envTookFollowupTurn = True
 
         if (agentTookTurn and qG.isDone) or (envTookFollowupTurn):
-            transition = Transition(S, reward, S_PRIME, z_weights, qG.isDone)
+            transition = Transition(v_Sw, reward, S_PRIME, z_weights, qG.isDone)
             #print(f'turnNumber: {turnNumber}')
             trainNetwork(transition, agent, qG)
             agentTookTurn = False
@@ -990,7 +1029,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', nargs=1, help="sets the seed for the randomizer")
     parser.add_argument('-t', nargs=1, help="sets the game up for training an Agent of type <agentIndex>")
     parser.add_argument('-a', nargs=6, help="Assigns lparams <gamma> <lambda> <alpha> <alpha_decay> <epsilon> <epsilon_decay> of an Agent")
-    parser.add_argument('-l', nargs=2, help="sets the game up using <modelPath>")
+    parser.add_argument('-l', nargs=2, help="sets the game up using <agent Type> <agent Path>")
     parser.add_argument('-o', nargs=2, help="loads a model for the oponent")
     parser.add_argument('-n', help="Starts a version of the NEW QUARTO GAME")
     parser.add_argument('-f', nargs=1, help='Select Function Approximation Index')
@@ -1014,8 +1053,12 @@ if __name__ == '__main__':
 # -t 1 -l modelTargets/TDLambda/Initial/saveDECAYNN2
 # -t 1 -l modelTargets/TDLambda/Initial/NEWNN1009
 
+#Training new:
+#-t 2 -l 2 modelTargets/TDLambda/Corrected_eigth/agent1347 -n 1 -f 1
+
 #TRAINING NEW:
-#-t 2 -a 1 0 1 0.999 0.3 0.999 -n 1 -f 1
+#-t 2 -a 1 0 1 0.999 0.3 0.999 -n 1 -f 1 #TDLAN
+#-t 3 -a 0.7 0.4 1 0.9999 0.3 0.9999 -n 1 -f 1 #DQN
 
 #Training from scratch:
 #-t 1 -a 1 0 1 0.999 0.3 0.999

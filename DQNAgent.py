@@ -5,7 +5,7 @@ import Quarto_Game as QG
 import copy
 
 
-class TDLambdaAgent():
+class DQNAgent():
 
     def __init__(self, functionAproxModel):
         self.currentNN = functionAproxModel
@@ -26,11 +26,37 @@ class TDLambdaAgent():
         return bestMove  # tuple: (index to place, piece to give)
 
     def findBestMove(self, validMoves):
-        bestScore = None #torch.tensor([-1.0])
-        worstScore = torch.tensor([1.0])
-        bestMove = None
+        bestScore = torch.tensor([0])
+        worstScore = torch.tensor([1])
+        bestMove = random.choice(validMoves)
         # print(f'## AMOUNT OF VALID MOVES: {len(validMoves)}')
-        placementPieceIndex = self.qG.pickedPieceRep.view(-1).nonzero()
+        #placementPieceIndex = self.qG.pickedPieceRep.view(-1).nonzero()
+
+        mask_vector = torch.zeros((17*17))
+        #Map valid moves to mask
+
+        for (placementIdx, pieceIdx) in validMoves: #pieceIdx is 1-indexed
+
+            #print(f'placementIdx: {placementIdx}')
+            #print(f'pieceIdx: {pieceIdx}')
+            if placementIdx == None:
+                placementIdx = 16
+            else:
+                placementIdx = placementIdx[0] * 4 + placementIdx[1]
+            if pieceIdx == None:
+                placementIdx = 16
+            else:
+                pieceIdx -= 1
+            mask_vector[placementIdx*17+pieceIdx] = 1 #because piexeIdx is 1-indexed, minus one.
+            print(f'placementIdx: {placementIdx}')
+            print(f'pieceIdx: {pieceIdx}')
+
+        print(f'mask_vector: {mask_vector}')
+        print(f'mask_vector LEN: {len(mask_vector.nonzero())}')
+
+        print(f'validMoves: len: {len(validMoves)}')
+        '''
+
 
         if placementPieceIndex.size()[0] > 0:
             placementPieceIndex = placementPieceIndex.item() + 1
@@ -56,32 +82,24 @@ class TDLambdaAgent():
             if torch.cuda.is_available():
                 #print(f'ARE WEHERERERE?!?!?!?!?!?')
                 inputTens = inputTens.cuda()
-
-            inputTens = inputTens / 16 #normalize input
-            #print(f'inputTens: {inputTens}')
             #print(f'IS CUDA? {torch.cuda.is_available()}')
             #print(f'INPUT TENS: {inputTens}')
             #print(f'DID WE GET SYMS? {inputTens}')
             moveScore = self.currentNN(inputTens)
-            if bestScore is None:
-                bestScore = moveScore
 
             # TODO: ALWAYS SAME MoveScore?!?!?!
-            #print(f'MoveScore: {moveScore}')
+            # print(f'MoveScore: {moveScore}')
             if moveScore.item() >= bestScore.item():
                 bestScore = moveScore
                 bestMove = (placement, pieceIdx)
 
             if moveScore.item() <= worstScore.item():
                 worstScore = moveScore
-        #print(f'training_Agent: {self.trainingAgent}')
 
-        #print(f'Best Move: {bestMove}')
-        #
-        if self.trainingAgent:
-            print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
-
-
+        # print(f'Best Move: {bestMove}')
+        #if self.trainingAgent:
+        #    print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
+        '''
         return bestMove
 
     def setBoard(self, qG):
@@ -92,4 +110,4 @@ class TDLambdaAgent():
             self.lparams[k] = v
 
     def __str__(self):
-        return f'TDLambdaAgentNEW'
+        return f'DQNAgent'
