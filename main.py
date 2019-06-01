@@ -339,8 +339,8 @@ def trainNetwork(transition, agent, qG):
     else:
         delta_error = reward + (agent.lparams['gamma'] * af ) - be
 
-    print(f'reward: {reward}')
-    print(f'delta_error: {delta_error.view(-1)}')
+    #print(f'reward: {reward}')
+    #print(f'delta_error: {delta_error.view(-1)}')
     #a = agent.lparams['alpha']
     #print(f'Gradients 2222: {a * z_i[2].data * delta_error.view(-1)}')
     #rint(f'Gradients 3333: {a * z_i[3].data * delta_error.view(-1)}')
@@ -351,7 +351,7 @@ def trainNetwork(transition, agent, qG):
     for paramf, z in zip(agent.currentNN.parameters(), z_i):
         if torch.cuda.is_available():
             z.data = z.data.cuda()
-        print(f'z_data: {z.data}')
+        #print(f'z_data: {z.data}')
         #print(f'z_0s: {(z == 0).nonzero().size()}')
         #print(f'z size(): {len(z.view(-1))}')
         paramf.data += agent.lparams['alpha'] * z.data * delta_error.view(-1)
@@ -765,7 +765,7 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
                 'current_state_dict': agent.currentNN.state_dict(),
                 'episode': episode,
                 'agent_lparams': agent.lparams.copy(),
-                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/tanh_first/agent{int(episode / 50)}.tar")
+                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/DropOut_first_h/agent{int(episode / 50)}.tar")
             eTimeBegin = time.time()
 
 
