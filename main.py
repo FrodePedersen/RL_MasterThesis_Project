@@ -350,16 +350,16 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
     for i in range(state_action_values.size()[0]):
         if Q_s_a_Current is None:
             Q_s_a_Current = torch.tensor([state_action_values[i][action_batch[i]]])
-            if torch.cuda.is_available:
+            if torch.cuda.is_available():
                 Q_s_a_Current = Q_s_a_Current.cuda()
         else:
             a = torch.stack([state_action_values[i][action_batch[i]]])
-            if torch.cuda.is_available:
+            if torch.cuda.is_available():
                 a = a.cuda()
             Q_s_a_Current = torch.cat([Q_s_a_Current, a])
 
     y = torch.zeros(reward_batch.size())
-    if torch.cuda.is_available:
+    if torch.cuda.is_available():
         y = y.cuda()
         #print(f'Terminal_batch: {terminal_batch}')
         #print(f'Terminal_batch.nonzero: {terminal_batch.nonzero()}')
@@ -377,7 +377,7 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
         next_state_masks = next_state_masks.cuda()
     Q_s_a_After = torch.abs(agent.lparams['gamma'] * torch.max(agent.targetNN(next_state_batch, next_state_masks), 1)[0])
 
-    if torch.cuda.is_available:
+    if torch.cuda.is_available():
         y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] + Q_s_a_After[(terminal_batch == 0).nonzero()]
     else:
         y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] +  Q_s_a_After[(terminal_batch == 0).nonzero()]
@@ -877,7 +877,7 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
                 'episode': episode,
                 'avg_loss': av_loss,
                 'agent_lparams': agent.lparams.copy(),
-                'checkpoint_number': episode / 50}, f"./modelTargets/DQN/Initial/agent{int(episode / 50)}.tar")
+                'checkpoint_number': episode / 50}, f"./modelTargets/DQN/third_db/agent{int(episode / 50)}.tar")
             eTimeBegin = time.time()
 
             avg_loss = []

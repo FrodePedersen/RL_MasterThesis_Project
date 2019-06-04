@@ -71,7 +71,7 @@ class softmax_Model(nn.Module):
         # self.conv2 = nn.Conv2d(in_channels=28, out_channels=56,kernel_size=2, padding=1)
 
         # self.fc1 = nn.Linear(28 * 3 * 3, 4 * 4 * 7)
-        self.drop = nn.Dropout(p=0.5)
+        self.drop = nn.Dropout(p=0.1)
         self.fc1 = nn.Linear(3 * 4 * 4, 9 * 4 * 4)
         self.fc2 = nn.Linear(9 * 4 * 4, 17*17)
         self.softMax = nn.LogSoftmax(dim=0)
