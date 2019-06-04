@@ -359,7 +359,7 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
 
     y = torch.zeros(reward_batch.size())
     if torch.cuda.is_available:
-        y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero().cuda()]
+        y[terminal_batch.nonzero().cuda()] = reward_batch[terminal_batch.nonzero().cuda()]
     else:
         y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero()]
 
@@ -370,7 +370,11 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
         next_state_batch = next_state_batch.cuda()
         next_state_masks = next_state_masks.cuda()
     Q_s_a_After = torch.abs(agent.lparams['gamma'] * torch.max(agent.targetNN(next_state_batch, next_state_masks), 1)[0])
-    y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] +  Q_s_a_After[(terminal_batch == 0).nonzero()]
+
+    if torch.cuda.is_available:
+        y[(terminal_batch == 0).nonzero().cuda()] = reward_batch[(terminal_batch == 0).nonzero().cuda()] + Q_s_a_After[(terminal_batch == 0).nonzero().cuda()].cuda()
+    else:
+        y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] +  Q_s_a_After[(terminal_batch == 0).nonzero()]
 
     #Compute MSELoss
     loss = nn.MSELoss()
