@@ -358,8 +358,11 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
             Q_s_a_Current = torch.cat([Q_s_a_Current, a])
 
     y = torch.zeros(reward_batch.size())
+    if torch.cuda.is_available:
+        y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero().cuda()]
+    else:
+        y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero()]
 
-    y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero()]
 
     next_state_masks = agent.find_mask_vector(next_state_batch)
     agent.targetNN.eval()
