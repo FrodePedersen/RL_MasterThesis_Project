@@ -111,6 +111,7 @@ class softmax_Model(nn.Module):
             j = torch.stack(j)
 
         else:
+            print(f'TYPES MASK, X: {mask, x}')
             x_i = (mask * (x + 2.0) - 1.0)
             j = self.softMax(x_i)
 
