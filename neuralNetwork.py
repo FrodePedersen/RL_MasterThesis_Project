@@ -94,8 +94,7 @@ class softmax_Model(nn.Module):
         if(mask.size()[0] == 1):
             mask = mask.view(-1)
 
-        if torch.cuda.is_available():
-            mask = mask.cuda()
+
         #print(f'INPUT AFTER: {x,mask}')
         x = self.drop(x)
         x = self.sigmoid(self.fc1(x))
@@ -104,7 +103,10 @@ class softmax_Model(nn.Module):
         j = None
         if len(x.size()) > 1:       #For batch
             for i in range(x.size()[0]):
+                if torch.cuda.is_available():
+                    mask[i] = mask[i].cuda()
                 print(f'TYPES MASK, X: {mask[i], x[i]}')
+
                 x_i = (mask[i] * (x[i] + 2.0) - 1.0)
 
                 if j is None:
@@ -114,6 +116,8 @@ class softmax_Model(nn.Module):
             j = torch.stack(j)
 
         else:
+            if torch.cuda.is_available():
+                mask = mask.cuda()
             print(f'TYPES MASK, X: {mask, x}')
             x_i = (mask * (x + 2.0) - 1.0)
             j = self.softMax(x_i)
