@@ -14,7 +14,9 @@ import DQNAgent as DQN
 import random
 import ReplayMemory as RP
 from ReplayMemory import Transition
+from ReplayMemory import TransitionDQN
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from statistics import mean
 import time
@@ -118,7 +120,7 @@ def selectAgentIndex(index, functionAproxModel):
     return iToA[index]
 
 def functionIndex(index):
-    model = {0: NN.CNN_Model(), 1: NN.relu_Model_endSigmoid()}[index]
+    model = {0: NN.CNN_Model(), 1: NN.relu_Model_endSigmoid(), 2: NN.softmax_Model()}[index]
     if torch.cuda.is_available():
         model = model.cuda()
     return model
@@ -296,6 +298,86 @@ def playTrainingGame(agent, envAgent, qG, placementPiece):
 
     #qG.printGame()
     return winner
+
+def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
+    if len(rpm) < batch_size:
+        return
+
+    agent.currentNN.zero_grad()
+    agent.targetNN.zero_grad()
+
+    transitions = rpm.sample(batch_size)
+    batch = TransitionDQN(*zip(*transitions))
+
+    reward_batch = torch.cat(batch.reward)
+    state_batch = torch.stack(batch.state)
+
+    action_batch = None
+    for a in batch.action:
+        coordIdx = a[0]
+        if coordIdx is None:
+            coordIdx = 16
+        else:
+            coordIdx = coordIdx[0] * 4 + coordIdx[1]
+        pieceIdx = a[1]
+        if pieceIdx is None:
+            pieceIdx = 16
+        else:
+            pieceIdx = a[1] - 1
+
+        #print(f'coord: {a[0]}, pieceIdx: {a[1]}')
+        #print(f'coordIdx: {coordIdx}, pieceIdx {pieceIdx}')
+        if action_batch is None:
+            action_batch = torch.tensor([coordIdx * 16 + pieceIdx])
+        else:
+            action_batch = torch.cat([action_batch, torch.tensor([coordIdx * 16 + pieceIdx])])
+
+    mask_batch = torch.stack(batch.mask)
+    next_state_batch = torch.stack(batch.next_state)
+    terminal_batch = torch.tensor(list(batch.terminal))
+    agent.currentNN.train()
+    if torch.cuda.is_available():
+        state_batch = state_batch.cuda()
+        mask_batch = mask_batch.cuda()
+
+    state_action_values = agent.currentNN(state_batch, mask_batch)#.gather(1, action_batch) #Get the action currentNN chose of current state. Q(s,a)
+
+    Q_s_a_Current = None
+    for i in range(state_action_values.size()[0]):
+        if Q_s_a_Current is None:
+            Q_s_a_Current = torch.tensor([state_action_values[i][action_batch[i]]])
+        else:
+            a = torch.stack([state_action_values[i][action_batch[i]]])
+            Q_s_a_Current = torch.cat([Q_s_a_Current, a])
+
+    y = torch.zeros(reward_batch.size())
+
+    y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero()]
+
+    next_state_masks = agent.find_mask_vector(next_state_batch)
+    agent.targetNN.eval()
+    if torch.cuda.is_available():
+        next_state_batch = next_state_batch.cuda()
+        next_state_masks = next_state_masks.cuda()
+    Q_s_a_After = torch.abs(agent.lparams['gamma'] * torch.max(agent.targetNN(next_state_batch, next_state_masks), 1)[0])
+    y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] +  Q_s_a_After[(terminal_batch == 0).nonzero()]
+
+    #Compute MSELoss
+    loss = nn.MSELoss()
+    output = loss(torch.abs(Q_s_a_Current), y)
+    #print(f'loss: {output}')
+    if torch.cuda.is_available():
+        output = output.cuda()
+    optimizer.zero_grad()
+    output.backward()
+    optimizer.step()
+
+    return output
+    #raise Exception
+
+
+    #state = transition.state
+
 
 def trainNetwork(transition, agent, qG):
     agent.currentNN.train()
@@ -687,6 +769,8 @@ def playManuelGameNEWQuarto(players, qG, seed):
 def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
     random.seed(seed)
     arpm = RP.AgentMemory(100)
+    rpm = RP.ReplayMemoryDQN(1000)
+
     print(agent)
     if str(agent) == 'TDLambdaAgentNEW':
         envAgent = TDLAN.TDLambdaAgent(functionIndex(fIndex))
@@ -702,16 +786,13 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
     print(f'TYPE OF AGENT: {agent}')
     eTimeBegin = time.time()
     eTimeEnd = 0
+    optimizer = optim.SGD(agent.currentNN.parameters(), lr=agent.lparams['alpha'], momentum=0.9)
+    avg_loss = []
     for episode in range(initEpisode, nEpisodes):
-        #print(f'NEW GAME!!!!')
-        #print(f'NEW GAME!!!!')
-        #print(f'NEW GAME!!!!')
-        #print(f'NEW GAME!!!!')
-        qG = None#qg.GameBoard()
+        qG = None #qg.GameBoard() # HHHHHHUUUUUUUUUUUUSSSSSSSKKKKKKKKK at få tilbage til randomized initial!!
 
         while True:
             qG = qg.GameBoard()
-            # print(f'INSIDE WHILE LOOP')
             placementPiece = qG.randomInitOfGame()
             if not qG.isDone:
                 break
@@ -728,10 +809,13 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
         #print(f'TYPE OF ADVERSARY: {envAgent}')
 
 
-        result = playTrainingGameNEW(agent, envAgent, qG, placementPiece)
+        #result = playTrainingGameNEW(agent, envAgent, qG, placementPiece)
+        result = playTrainingGameDQN(agent, envAgent, qG, placementPiece, rpm) # DQN TEST
 
 
-
+        loss = trainNetworkDQN(agent, qG, rpm, optimizer, batch_size=50)
+        if loss is not None:
+            avg_loss.append(loss)
         '''
         if result == -1:
             print(f'Game was a draw')
@@ -744,16 +828,23 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
             raise Exception('INVALID RESULT')
         '''
 
+        if str(agent) == 'TDLambdaAgentNEW':
+            newAgent = TDLAN.TDLambdaAgent(functionIndex(fIndex))
+            newAgent.lparams = agent.lparams.copy()
+            newAgent.currentNN.load_state_dict(agent.currentNN.state_dict().copy())
+            arpm.push(newAgent)
+        elif str(agent) == 'DQNAgent':
+            newAgent = DQN.DQNAgent(functionIndex(fIndex))
+            newAgent.lparams = agent.lparams.copy()
+            newAgent.currentNN.load_state_dict(agent.currentNN.state_dict().copy())
+            arpm.push(newAgent)
 
 
-
-        newAgent = TDLAN.TDLambdaAgent(functionIndex(fIndex))
-        newAgent.lparams = agent.lparams.copy()
-        newAgent.currentNN.load_state_dict(agent.currentNN.state_dict().copy())
-        arpm.push(newAgent)
 
         #print(f'Lparams: {agent.lparams}')
         if episode % 50 == 0:
+            av_loss = torch.mean(torch.stack(avg_loss))
+            print(f'avg_loss {av_loss}')
             agent.targetNN.load_state_dict(agent.currentNN.state_dict().copy())
             agent.targetNN.eval()
             print(f'ROUND {episode}')
@@ -764,9 +855,12 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
                 'target_state_dict': agent.targetNN.state_dict(),
                 'current_state_dict': agent.currentNN.state_dict(),
                 'episode': episode,
+                'avg_loss': av_loss,
                 'agent_lparams': agent.lparams.copy(),
-                'checkpoint_number': episode / 50}, f"./modelTargets/TDLambda/DropOut_first_h/agent{int(episode / 50)}.tar")
+                'checkpoint_number': episode / 50}, f"./modelTargets/DQN/Initial/agent{int(episode / 50)}.tar")
             eTimeBegin = time.time()
+
+            avg_loss = []
 
 
         if agent.lparams['alpha'] > 0.1:
@@ -775,6 +869,96 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
         if agent.lparams['epsilon'] > 0.1:
             agent.lparams['epsilon'] *= agent.lparams['epsilon_decay']
 
+def playTrainingGameDQN(agent, envAgent, qG, placementPiece, rpm):
+    placementPiece = placementPiece
+    playerInTurn = bool(random.getrandbits(1))
+    agent = agent
+    envAgent = envAgent
+    agentTookTurn = False
+    envTookFollowupTurn = False
+
+    agent.trainingAgent = True
+    envAgent.trainingAgent = False
+
+    winner = -1
+    turnNumber = 0
+    z_weights = []
+    S = None
+    S_PRIME = None
+    action = None
+    reward = torch.tensor([0.0])
+
+    while qG.isDone != True:
+        turnNumber += 1
+        # print(f'TurnNumber Beging: {turnNumber}, playerInTurn: {int(playerInTurn)}')
+        # Training Agent
+        if int(playerInTurn) == 0:
+            S = torch.stack([qG.boardRep.clone(), qG.piecePoolRep.clone(), qG.pickedPieceRep.clone()])
+
+            move_scores, mask_vector = agent.act()
+            if random.random() > agent.lparams['epsilon'].item():
+                moveIdx = move_scores.argmax()
+            else:
+                mask = move_scores > move_scores.min()
+                moveIdx = random.choice(mask.nonzero())
+            (placement, pieceIdx) = agent.translateScoresToMove(moveIdx)
+            action = (placement, pieceIdx)
+            if placement is not None:
+                placement = (placement[0], placement[1])
+                newBoardRep = qG.placePieceAt(placementPiece, placement)
+                qG.storeState(boardmat=newBoardRep)
+                if qG.firstMove:
+                    qG.setSyms(placement)
+                if qG.isWinningMove(newBoardRep):
+                    winner = 1
+                    reward = torch.tensor([1.0])
+                    qG.isDone = True
+
+            if pieceIdx is not None:
+                newPiecePool, newPickedPieceRep = qG.takePieceFromPool(pieceIdx)
+                qG.storeState(piecePool=newPiecePool, pickedPieceRep=newPickedPieceRep)
+                placementPiece = pieceIdx
+
+            S_PRIME = torch.stack([qG.boardRep.clone(), qG.piecePoolRep.clone(), qG.pickedPieceRep.clone()])
+
+            agentTookTurn = True
+            envTookFollowupTurn = False
+
+        # EnvAgent
+        else:
+            move_scores, mask_vector = envAgent.act()
+            (placement, pieceIdx) = agent.translateScoresToMove(move_scores.argmax())
+            if placement is not None:
+                placement = (placement[0], placement[1])
+                newBoardRep = qG.placePieceAt(placementPiece, placement)
+                qG.storeState(boardmat=newBoardRep)
+
+                if qG.firstMove:
+                    qG.setSyms(placement)
+
+                if qG.isWinningMove(newBoardRep):
+                    winner = 0
+                    # reward = torch.tensor([-1.0])
+                    qG.isDone = True
+
+            if pieceIdx is not None:
+                newPiecePool, newPickedPieceRep = qG.takePieceFromPool(pieceIdx)
+                qG.storeState(piecePool=newPiecePool, pickedPieceRep=newPickedPieceRep)
+                placementPiece = pieceIdx
+
+            if agentTookTurn:
+                envTookFollowupTurn = True
+
+        if (agentTookTurn and qG.isDone) or (envTookFollowupTurn):
+            rpm.push(S, reward, action, mask_vector, S_PRIME, qG.isDone)  # push to rpm for DQN
+            agentTookTurn = False
+
+        if qG.isDone or qG.isDraw():
+            break
+
+        playerInTurn = not playerInTurn
+
+    return winner
 
 def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
     placementPiece = placementPiece
@@ -793,7 +977,7 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
     z_weights = []
     S = None
     S_PRIME = None
-
+    action = None
     reward = torch.tensor([0.0])
 
     while qG.isDone != True:
@@ -1062,6 +1246,10 @@ if __name__ == '__main__':
 
 #Training from scratch:
 #-t 1 -a 1 0 1 0.999 0.3 0.999
+
+#TRAINING DQN
+#        g l a
+#-t 3 -a 1 0 1 0.9999 0.3 0.9999 -n 1 -f 2
 
 #Use new QuartoGame
 #-n

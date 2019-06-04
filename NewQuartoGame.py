@@ -180,6 +180,31 @@ class GameBoard(object):
         # print(f'### COLLECTVALID: LEN: {len(result)}')#, list: {result}')
         return result
 
+    def findMovesForState(self, state):
+        validIndeces = []
+        boardRep = state[0]
+        piecePoolRep = state[1]
+        pickedPieceRep = state[2]
+
+        if not boardRep.sum() == 0 or len((piecePoolRep == 0).nonzero()) > 0:  # Checks if the board is clean, if so don't place
+            validIndeces = (boardRep == 0).nonzero().tolist()
+
+        if len(validIndeces) < 1:
+            validIndeces = [None]  # Start of the game has no indeces
+
+        validPieceIds = [p.item() + 1 for p in piecePoolRep.view(-1).nonzero()]
+        if len(validPieceIds) < 1:
+            validPieceIds = [None]  # End of game has no valid pieces, only 1 index
+
+        result = []
+
+        for index in validIndeces:
+            for piece in validPieceIds:
+                result.append((index, piece))
+
+        # print(f'### COLLECTVALID: LEN: {len(result)}')#, list: {result}')
+        return result
+
     def getPiecePool(self):
         return self.piecePool
 

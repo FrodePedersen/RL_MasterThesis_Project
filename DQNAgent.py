@@ -16,91 +16,95 @@ class DQNAgent():
 
     def act(self):
         validMoves = self.qG.collectValidMoves()  # List containing all permutations of (piece to give, valid placement of piece given)
-        bestMove = None
-
-        if random.random() > self.lparams['epsilon'].item():
-            bestMove = self.findBestMove(validMoves)
-        else:
-            bestMove = random.choice(validMoves)
+        bestMove = self.findBestMove(validMoves)
 
         return bestMove  # tuple: (index to place, piece to give)
 
     def findBestMove(self, validMoves):
-        bestScore = torch.tensor([0])
-        worstScore = torch.tensor([1])
-        bestMove = random.choice(validMoves)
+        self.currentNN.eval()
+        bestScore = None
+        worstScore = None
+        #bestMove = random.choice(validMoves) #Remove once done
         # print(f'## AMOUNT OF VALID MOVES: {len(validMoves)}')
         #placementPieceIndex = self.qG.pickedPieceRep.view(-1).nonzero()
 
-        mask_vector = torch.zeros((17*17))
+        mask_vector = torch.zeros((17*17)) #(coord, piece) (16, 16). (None, None).
         #Map valid moves to mask
 
         for (placementIdx, pieceIdx) in validMoves: #pieceIdx is 1-indexed
 
             #print(f'placementIdx: {placementIdx}')
             #print(f'pieceIdx: {pieceIdx}')
-            if placementIdx == None:
+            if placementIdx is None:
                 placementIdx = 16
             else:
                 placementIdx = placementIdx[0] * 4 + placementIdx[1]
-            if pieceIdx == None:
-                placementIdx = 16
+            if pieceIdx is None:
+                pieceIdx = 16
             else:
                 pieceIdx -= 1
             mask_vector[placementIdx*17+pieceIdx] = 1 #because piexeIdx is 1-indexed, minus one.
-            print(f'placementIdx: {placementIdx}')
-            print(f'pieceIdx: {pieceIdx}')
-
-        print(f'mask_vector: {mask_vector}')
-        print(f'mask_vector LEN: {len(mask_vector.nonzero())}')
-
-        print(f'validMoves: len: {len(validMoves)}')
-        '''
+            #print(f'placementIdx: {placementIdx}')
+            #print(f'pieceIdx: {pieceIdx}')
 
 
-        if placementPieceIndex.size()[0] > 0:
-            placementPieceIndex = placementPieceIndex.item() + 1
+        #Get input
+        newBoardRep = self.qG.boardRep
+        newPiecePool = self.qG.piecePoolRep
+        newPickedPieceRep = self.qG.pickedPieceRep
+        inputTens = self.qG.calculateSymmetries(torch.stack([newBoardRep, newPiecePool, newPickedPieceRep]))
+        inputTens = inputTens / 16 #Normalize input
+        if torch.cuda.is_available():
+            inputTens = inputTens.cuda()
 
-        #print(f'LLLEEEENNN::: {len(validMoves)}')
-        for (placement, pieceIdx) in validMoves:
-            newBoardRep = self.qG.boardRep
-            newPiecePool = self.qG.piecePoolRep
-            newPickedPieceRep = self.qG.pickedPieceRep
-
-            if placement != None:
-                placement = (placement[0], placement[1])
-                newBoardRep = self.qG.placePieceAt(placementPieceIndex, placement)
-
-            if pieceIdx != None:
-                newPiecePool, newPickedPieceRep = self.qG.takePieceFromPool(pieceIdx)
-                placementPieceIndex = pieceIdx
-
-            self.currentNN.zero_grad()
-            self.currentNN.eval()
-            #print(f'BEFORE SYMS: {torch.stack([newBoardRep, newPiecePool, newPickedPieceRep])}')
-            inputTens = self.qG.calculateSymmetries(torch.stack([newBoardRep, newPiecePool, newPickedPieceRep]))
-            if torch.cuda.is_available():
-                #print(f'ARE WEHERERERE?!?!?!?!?!?')
-                inputTens = inputTens.cuda()
-            #print(f'IS CUDA? {torch.cuda.is_available()}')
-            #print(f'INPUT TENS: {inputTens}')
-            #print(f'DID WE GET SYMS? {inputTens}')
-            moveScore = self.currentNN(inputTens)
-
-            # TODO: ALWAYS SAME MoveScore?!?!?!
-            # print(f'MoveScore: {moveScore}')
-            if moveScore.item() >= bestScore.item():
-                bestScore = moveScore
-                bestMove = (placement, pieceIdx)
-
-            if moveScore.item() <= worstScore.item():
-                worstScore = moveScore
-
-        # print(f'Best Move: {bestMove}')
+        moveScores = self.currentNN(inputTens, mask_vector)
         #if self.trainingAgent:
-        #    print(f'Best Score: {bestScore}, worstScore: {worstScore}, difference: {bestScore - worstScore}')
-        '''
-        return bestMove
+        #    print(f'bestScore: {moveScores.max()}, worstScore: {moveScores.min()}, difference: {moveScores.max() - moveScores.min()}')
+        return moveScores, mask_vector
+
+    def find_mask_vector(self, state):
+        masks = None
+        for i in range(state.size()[0]):
+            valid_moves = self.qG.findMovesForState(state[i])
+            mask_vector = torch.zeros((17 * 17))  # (coord, piece) (16, 16). (None, None).
+            # Map valid moves to mask
+
+            for (placementIdx, pieceIdx) in valid_moves:  # pieceIdx is 1-indexed
+
+                # print(f'placementIdx: {placementIdx}')
+                # print(f'pieceIdx: {pieceIdx}')
+                if placementIdx is None:
+                    placementIdx = 16
+                else:
+                    placementIdx = placementIdx[0] * 4 + placementIdx[1]
+                if pieceIdx is None:
+                    pieceIdx = 16
+                else:
+                    pieceIdx -= 1
+                mask_vector[placementIdx * 17 + pieceIdx] = 1  # because piexeIdx is 1-indexed, minus one.
+
+            if masks is None:
+                masks = [mask_vector]
+            else:
+                masks.append(mask_vector)
+
+        masks = torch.stack(masks)
+        return masks
+
+    def translateScoresToMove(self, moveIdx):
+        #print(f'move: {moveIdx}')
+        coord = int(moveIdx / 17) #set the coordinate entry
+        if coord == 16:
+            coord = None
+        else:
+            coord = (int(coord / 4), coord % 4)
+
+        pieceIdx = moveIdx % 17 + 1
+
+        if pieceIdx == 17:
+            pieceIdx = None
+        #print(f'TranslateScoresToMove: {(coord, pieceIdx)}')
+        return (coord, pieceIdx)
 
     def setBoard(self, qG):
         self.qG = qG
