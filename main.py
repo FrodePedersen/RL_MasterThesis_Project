@@ -349,6 +349,8 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
     for i in range(state_action_values.size()[0]):
         if Q_s_a_Current is None:
             Q_s_a_Current = torch.tensor([state_action_values[i][action_batch[i]]])
+            if torch.cuda.is_available:
+                Q_s_a_Current = Q_s_a_Current.cuda()
         else:
             a = torch.stack([state_action_values[i][action_batch[i]]])
             if torch.cuda.is_available:
