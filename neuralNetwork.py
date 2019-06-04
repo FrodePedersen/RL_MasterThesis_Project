@@ -93,6 +93,9 @@ class softmax_Model(nn.Module):
             x = x.view(-1)
         if(mask.size()[0] == 1):
             mask = mask.view(-1)
+
+        if torch.cuda.is_available():
+            mask = mask.cuda()
         #print(f'INPUT AFTER: {x,mask}')
         x = self.drop(x)
         x = self.sigmoid(self.fc1(x))
