@@ -103,9 +103,8 @@ class softmax_Model(nn.Module):
         j = None
         if len(x.size()) > 1:       #For batch
             for i in range(x.size()[0]):
-                if torch.cuda.is_available():
-                    mask[i] = mask[i].cuda()
-                #print(f'TYPES MASK, X: {mask[i], x[i]}')
+
+                print(f'TYPES MASK, X: {mask[i], x[i]}')
 
                 x_i = (mask[i] * (x[i] + 2.0) - 1.0)
 
