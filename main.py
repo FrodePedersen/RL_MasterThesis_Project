@@ -359,6 +359,10 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
 
     y = torch.zeros(reward_batch.size())
     if torch.cuda.is_available:
+        print(f'Terminal_batch: {terminal_batch}')
+        print(f'Terminal_batch.nonzero: {terminal_batch.nonzero()}')
+        print(f'reward_batch: {reward_batch}')
+        
         y[terminal_batch.nonzero().cuda()] = reward_batch[terminal_batch.nonzero().cuda()]
     else:
         y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero()]
