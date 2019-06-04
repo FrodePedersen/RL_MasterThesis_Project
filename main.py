@@ -341,6 +341,7 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
         mask_batch = mask_batch.cuda()
         action_batch = action_batch.cuda()
         reward_batch = reward_batch.cuda()
+        terminal_batch = terminal_batch.detach()
         terminal_batch = terminal_batch.float().cuda()
 
     state_action_values = agent.currentNN(state_batch, mask_batch)#.gather(1, action_batch) #Get the action currentNN chose of current state. Q(s,a)
