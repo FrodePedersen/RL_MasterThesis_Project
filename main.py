@@ -378,7 +378,7 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
     Q_s_a_After = torch.abs(agent.lparams['gamma'] * torch.max(agent.targetNN(next_state_batch, next_state_masks), 1)[0])
 
     if torch.cuda.is_available:
-        y[(terminal_batch == 0).nonzero().cuda()] = reward_batch[(terminal_batch == 0).nonzero().cuda()] + Q_s_a_After[(terminal_batch == 0).nonzero().cuda()].cuda()
+        y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] + Q_s_a_After[(terminal_batch == 0).nonzero()]
     else:
         y[(terminal_batch == 0).nonzero()] = reward_batch[(terminal_batch == 0).nonzero()] +  Q_s_a_After[(terminal_batch == 0).nonzero()]
 
