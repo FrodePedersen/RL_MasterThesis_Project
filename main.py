@@ -366,6 +366,9 @@ def trainNetworkDQN(agent, qG, rpm, optimizer, batch_size):
         r = reward_batch[terminal_batch.nonzero()]
         y_i = y[terminal_batch.nonzero()]
         y_i.data = r.data
+        print(f'r: {r}')
+        print(f'y_i: {y_i}')
+        print(f'y: {y}')
     else:
         y[terminal_batch.nonzero()] = reward_batch[terminal_batch.nonzero()]
 
