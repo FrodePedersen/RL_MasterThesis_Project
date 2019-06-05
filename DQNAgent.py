@@ -53,7 +53,7 @@ class DQNAgent():
         newPiecePool = self.qG.piecePoolRep
         newPickedPieceRep = self.qG.pickedPieceRep
         inputTens = self.qG.calculateSymmetries(torch.stack([newBoardRep, newPiecePool, newPickedPieceRep]))
-        inputTens = inputTens / 16 #Normalize input
+        inputTens = inputTens #Normalize input
         if torch.cuda.is_available():
             inputTens = inputTens.cuda()
 

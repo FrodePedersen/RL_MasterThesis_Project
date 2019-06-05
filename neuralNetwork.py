@@ -21,7 +21,7 @@ class relu_Model_endSigmoid(nn.Module):
         #self.fc2batch = nn.BatchNorm1d(num_features=16)
         self.fc3 = nn.Linear(16, 1)
 
-        self.drop = nn.Dropout(p=0.1) # 0.5 As according to Hinton et al.
+        #self.drop = nn.Dropout(p=0.1) # 0.5 As according to Hinton et al.
         self.sigmoid = nn.Sigmoid()
 
         #self.leakyRelu = nn.LeakyReLU()
@@ -50,12 +50,12 @@ class relu_Model_endSigmoid(nn.Module):
             print(f'LARGER THAN NORMALIZED: i')
         '''
         x = input.view(-1, 3 * 4 * 4)
-        x = self.sigmoid(self.fc1(self.drop(x)))
-        x = self.sigmoid(self.fc2(self.drop(x)))
+        x = self.sigmoid(self.fc1(x))#self.drop(x)))
+        x = self.sigmoid(self.fc2(x))#self.drop(x)))
         #print(f'fc2: {x}')
         #print(f'self.fc2.weight: {self.fc2.weight}')
         #print(f'self.fc2.bias: {self.fc2.bias}')
-        x = self.drop(x)
+        #x = self.drop(x)
         #print(f'x_drop?? {x} ')
         x = self.sigmoid(self.fc3(x))
         #print(f'fc3: {x}')

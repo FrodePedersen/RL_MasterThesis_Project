@@ -410,7 +410,7 @@ def trainNetwork(transition, agent, qG):
     state = transition.state#qG.calculateSymmetries(transition.state)
     reward = transition.reward
     next_state = qG.calculateSymmetries(transition.next_state)
-    next_state = next_state / 16 #Normalize input
+    next_state = next_state #Normalize input
     z_i = transition.z
     is_terminal = transition.terminal
 	
@@ -459,254 +459,6 @@ def trainNetwork(transition, agent, qG):
         paramf.data += agent.lparams['alpha'] * z.data * delta_error.view(-1)
         #print(f'WEIGHTS: {paramf}')
         #i += 1
-
-    #print(f'DONE TRAINING')
-
-'''
-def trainNetwork(rpm, agent, batch_size, optimizer):
-    agent.currentNN.train()
-    agent.targetNN.eval()
-    #if len(rpm.memory) < batch_size:
-    #    return
-
-    #print(f'RPM LEN: {len(rpm.memory)}')
-    transitions = rpm.memory
-    batch = Transition(*zip(*transitions))
-    #print(f'BATCH LEN: {len(batch)}')
-    #print(f'## BAAATTCHHH {batch}')
-
-    #print(f'### BATCH.STATE: {batch.state}')
-
-    reward_batch = torch.cat(batch.reward)
-    #print(f' BATCH REWARD {reward_batch}')
-    state_batch = torch.cat(batch.state)
-    next_state_batch = torch.cat(batch.next_state)
-
-    for z_b in batch.z:
-        for z in z_b:
-            print(f'SHAPE!! {z.size()}')
-        z_batch = z_batch.cat(z_b)
-    print(f'batch.z: {batch.z}')
-
-
-    #Estimated value using new currentNN
-    v_SwBatch = agent.currentNN(state_batch)
-
-    #print(f'v_SwBatch TRAINING. BatchSize: {batch_size}, v_Sw Size: {v_SwBatch.size()}')
-
-    #Target, using Frozen currentNN
-    v_Sw_PRIMEBatch = agent.targetNN(next_state_batch)
-
-    #print(f'v_SwBatch {v_SwBatch}')
-    #print(f'##################################')
-    #print(f'v_SwBatchPRIME {v_Sw_PRIMEBatch}')
-    #optimizer.zero_grad()
-
-    g = agent.lparams['gamma']
-    #print(f'reward size: {reward_batch.size()}')
-    #print(f'gamma Size: {g.size()}')
-    #print(f'PRIME SIZE: {v_Sw_PRIMEBatch.size()}')
-    #print(f'S SIZE: {v_SwBatch.size()}')
-
-    #print(f'SSSSS: {v_SwBatch}')
-    #print(f'SSSSS VIEW!!!: {v_SwBatch.view(-1)}')
-    #print(f'types: gamma {g.type()}, v_Sw: {v_SwBatch.type()}, v_SwPRIME: {v_Sw_PRIMEBatch.type()}, reward: {reward_batch.type()}')
-
-    #print(f'MULT? {(reward_batch + (g * v_Sw_PRIMEBatch)).type()}
-    #(torch.sum(torch.mul(policy.policy_history, Variable(rewards)).mul(-1), -1))
-    for i in range(len(rpm.memory)):
-        #print(f'training: {i}')
-        agent.currentNN.zero_grad()
-        agent.targetNN.zero_grad()
-        state = batch.state[i]
-        reward = batch.reward[i]
-        next_state = batch.next_state[i]
-        z_i = batch.z[i]
-        is_terminal = batch.terminal[i]
-
-        #mul = torch.mul(agent.lparams['gamma'], agent.targetNN(next_state).view(-1))
-        # print(f'MUL Size: {mul.size()}')
-        #add = reward + mul
-        # print(f'ADD: {add}')
-        # print(f'ADD Size: {add.size()}')
-        #print(f'difference?! {agent.currentNN(state)} ----- {agent.currentNN(state).view(-1)}')
-        if is_terminal:
-            delta_error = reward - agent.currentNN(state)
-        else:
-            delta_error = reward + (agent.lparams['gamma'] * agent.targetNN(next_state)) - agent.currentNN(state)
-        #print(f'DELTA ERROR: {delta_error}')
-        #delta_error.backward()
-
-        #Gradient Ascent:
-        #print(f'z_i.size(): {len(z_i)}')
-        i = 0
-        for paramf, z in zip(agent.currentNN.parameters(), z_i):
-            a = agent.lparams['alpha']
-
-            if i == 7:
-                print(f'##### INSIDE TRAINING #######')
-                print(f'paramf.data {paramf.data}')
-                print(f'z.data {z.data}')
-                print(f'a.data {a.data}')
-                print(f'delta: {delta_error.view(-1)}')
-
-            #print(f'PARAM DATA BEFORE?! {param}')
-            #print(f'z.nonzero?!?! {z.nonzero()}')
-            #WHOOO BOY THIS IS WRONG, NEEDS THE OLD DATA!!!
-            #calc =
-            #print(f'CALC?!!! {calc}')
-            #nz = calc.nonzero()
-            #print(f"nonzero? {nz}")
-            #print(f'paramf BEFORE {paramf}')
-
-            #print(f'SHAPES: {paramf.size(), a.size(), z.size(), delta_error.view(-1).size()}')
-            paramf.data += (agent.lparams['alpha'] * z.data * delta_error.view(-1))
-            #print(f'paramf AFTER {paramf}')
-            i += 1
-
-        #for param in agent.currentNN.parameters():
-        #    print(f'param AFTER: {param}')
-
-
-
-            #print(f'PARAM DATA AFTER!?! {param}')
-        #state = state_batch[i]
-
-
-    #params = agent.currentNN.parameters() + (agent.lparams['alpha'] * delta_error * z_batch)
-    #print(f'params: {params.size()}')
-
-    #optimizer.step()
-
-
-    #nn_model = agent.currentNN
-
-    #z =
-    print(f'Done Training:')
-
-'''
-
-'''
-def trainNetworkRPM(rpm, agent, batch_size, optimizer):
-    agent.currentNN.train()
-    agent.targetNN.eval()
-    if len(rpm.memory) < batch_size:
-        return
-
-    print(f'RPM: {rpm.memory}')
-    transitions = rpm.sample(batch_size)
-    batch = Transition(*zip(*transitions))
-    #print(f'## BAAATTCHHH {batch}')
-
-    #print(f'### BATCH.STATE: {batch.state}')
-
-    reward_batch = torch.cat(batch.reward)
-    #print(f' BATCH REWARD {reward_batch}')
-    state_batch = torch.cat(batch.state)
-    next_state_batch = torch.cat(batch.next_state)
-
-    for z_b in batch.z:
-        for z in z_b:
-            print(f'SHAPE!! {z.size()}')
-        z_batch = z_batch.cat(z_b)
-    print(f'batch.z: {batch.z}')
-
-    #Estimated value using new currentNN
-    v_SwBatch = agent.currentNN(state_batch)
-
-    #print(f'v_SwBatch TRAINING. BatchSize: {batch_size}, v_Sw Size: {v_SwBatch.size()}')
-
-    #Target, using Frozen currentNN
-    v_Sw_PRIMEBatch = agent.targetNN(next_state_batch)
-
-    #print(f'v_SwBatch {v_SwBatch}')
-    #print(f'##################################')
-    #print(f'v_SwBatchPRIME {v_Sw_PRIMEBatch}')
-    #optimizer.zero_grad()
-
-    g = agent.lparams['gamma']
-    #print(f'reward size: {reward_batch.size()}')
-    #print(f'gamma Size: {g.size()}')
-    #print(f'PRIME SIZE: {v_Sw_PRIMEBatch.size()}')
-    #print(f'S SIZE: {v_SwBatch.size()}')
-
-    #print(f'SSSSS: {v_SwBatch}')
-    #print(f'SSSSS VIEW!!!: {v_SwBatch.view(-1)}')
-    #print(f'types: gamma {g.type()}, v_Sw: {v_SwBatch.type()}, v_SwPRIME: {v_Sw_PRIMEBatch.type()}, reward: {reward_batch.type()}')
-
-    #print(f'MULT? {(reward_batch + (g * v_Sw_PRIMEBatch)).type()}
-    #(torch.sum(torch.mul(policy.policy_history, Variable(rewards)).mul(-1), -1))
-    for i in range(batch_size):
-        #print(f'training: {i}')
-        agent.currentNN.zero_grad()
-        agent.targetNN.zero_grad()
-        state = batch.state[i]
-        reward = batch.reward[i]
-        next_state = batch.next_state[i]
-        z_i = batch.z[i]
-        is_terminal = batch.terminal[i]
-
-        #mul = torch.mul(agent.lparams['gamma'], agent.targetNN(next_state).view(-1))
-        # print(f'MUL Size: {mul.size()}')
-        #add = reward + mul
-        # print(f'ADD: {add}')
-        # print(f'ADD Size: {add.size()}')
-        #print(f'difference?! {agent.currentNN(state)} ----- {agent.currentNN(state).view(-1)}')
-        if is_terminal:
-            delta_error = reward - agent.currentNN(state)
-        else:
-            delta_error = reward + (agent.lparams['gamma'] * agent.targetNN(next_state)) - agent.currentNN(state)
-        #print(f'DELTA ERROR: {delta_error}')
-        #delta_error.backward()
-
-        #Gradient Ascent:
-        #print(f'z_i.size(): {len(z_i)}')
-        i = 0
-        for paramf, z in zip(agent.currentNN.parameters(), z_i):
-            a = agent.lparams['alpha']
-
-            if i == 7:
-                print(f'##### INSIDE TRAINING #######')
-                print(f'paramf.data {paramf.data}')
-                print(f'z.data {z.data}')
-                print(f'a.data {a.data}')
-                print(f'delta: {delta_error.view(-1)}')
-
-            #print(f'PARAM DATA BEFORE?! {param}')
-            #print(f'z.nonzero?!?! {z.nonzero()}')
-            #WHOOO BOY THIS IS WRONG, NEEDS THE OLD DATA!!!
-            #calc =
-            #print(f'CALC?!!! {calc}')
-            #nz = calc.nonzero()
-            #print(f"nonzero? {nz}")
-            #print(f'paramf BEFORE {paramf}')
-
-            #print(f'SHAPES: {paramf.size(), a.size(), z.size(), delta_error.view(-1).size()}')
-            paramf.data += (agent.lparams['alpha'] * z.data * delta_error.view(-1))
-            #print(f'paramf AFTER {paramf}')
-            i += 1
-
-        #for param in agent.currentNN.parameters():
-        #    print(f'param AFTER: {param}')
-
-
-
-            #print(f'PARAM DATA AFTER!?! {param}')
-        #state = state_batch[i]
-
-
-    #params = agent.currentNN.parameters() + (agent.lparams['alpha'] * delta_error * z_batch)
-    #print(f'params: {params.size()}')
-
-    #optimizer.step()
-
-
-    #nn_model = agent.currentNN
-
-    #z =
-    print(f'Done Training:')
-
-'''
 
 def playManuelGameNEWQuarto(players, qG, seed):
     qG = qG.GameBoard()
@@ -877,7 +629,7 @@ def trainAgentNEW(agent, nEpisodes, seed, qg, fIndex, initEpisode=1):
                 'episode': episode,
                 'avg_loss': av_loss,
                 'agent_lparams': agent.lparams.copy(),
-                'checkpoint_number': episode / 50}, f"./modelTargets/DQN/third_db/agent{int(episode / 50)}.tar")
+                'checkpoint_number': episode / 50}, f"./modelTargets/DQN/un_restricted_1_h/agent{int(episode / 50)}.tar")
             eTimeBegin = time.time()
 
             avg_loss = []
@@ -1033,7 +785,7 @@ def playTrainingGameNEW(agent, envAgent, qG, placementPiece):
             #print(f'INPUT TENS: {S}')
             #print(f'SYMM: horizon, vertical {qG.horizontalSwap, qG.verticalSwap}')
             inputTens = qG.calculateSymmetries(S)
-            inputTens = inputTens / 16 #normalize input
+            inputTens = inputTens #normalize input
             #print(f'CALC SYMMETRIES?! {inputTens}')
             agent.currentNN.zero_grad()
             if torch.cuda.is_available():
